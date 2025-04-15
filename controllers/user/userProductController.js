@@ -9,6 +9,9 @@ import { HttpStatus } from "../../utils/httpStatus.js";
 
 export const getAllShopProducts = async (req, res) => {
 
+    console.log("Request", req);
+    
+
     try {
 
         const {
