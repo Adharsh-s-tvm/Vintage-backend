@@ -37,7 +37,7 @@ connectDB()
 
 const app = express()
 app.use(cors({
-    origin: [process.env.FRONTEND_URL,"https://vintage-frontend.vercel.app/"],
+    origin: [process.env.FRONTEND_URL,"https://www.vintagefashion.site"],
     methods:["GET","POST","DELETE","PATCH","PUT"],
     allowedHeaders:["Content-Type"],
     credentials: true
@@ -65,7 +65,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: process.env.FRONTEND_URL,
+        origin: [process.env.FRONTEND_URL,"https://www.vintagefashion.site"],
         methods: ["GET", "POST"],
         credentials: true
     }, 
