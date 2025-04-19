@@ -36,16 +36,35 @@ const port = process.env.PORT || 7000;
 connectDB()
 
 const app = express()
-app.options("*", cors());
+
+const allowedOrigins = [
+  'https://www.vintagefashion.site',
+  'https://vintagefashion.site',
+  'http://localhost:3000',
+  'https://vintage-frontend-adharshkattaikonam-gmailcoms-projects.vercel.app',
+  'https://vintage-frontend.vercel.app',
+  'https://vintage-fronte-git-cea20b-adharshkattaikonam-gmailcoms-projects.vercel.app'
+];
+
 app.use(cors({
-    origin: [
-      process.env.FRONTEND_URL,
-      "https://www.vintagefashion.site"
-    ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  }));
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'Accept',
+    'Origin'
+  ],
+}));
   
 
 initCouponExpirationCheck();
@@ -70,7 +89,7 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
     cors: {
-        origin: [process.env.FRONTEND_URL,"https://www.vintagefashion.site"],
+        origin: allowedOrigins,
         methods: ["GET", "POST"],
         credentials: true
     }, 
