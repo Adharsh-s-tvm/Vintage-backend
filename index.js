@@ -36,12 +36,17 @@ const port = process.env.PORT || 7000;
 connectDB()
 
 const app = express()
+app.options("*", cors());
 app.use(cors({
-    origin: [process.env.FRONTEND_URL,"https://www.vintagefashion.site"],
-    methods:["GET","POST","DELETE","PATCH","PUT"],
-    allowedHeaders:["Content-Type"],
-    credentials: true
-}));
+    origin: [
+      process.env.FRONTEND_URL,
+      "https://www.vintagefashion.site"
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  }));
+  
 
 initCouponExpirationCheck();
 
