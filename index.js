@@ -43,7 +43,8 @@ const allowedOrigins = [
   'http://localhost:3000',
   'https://vintage-frontend-adharshkattaikonam-gmailcoms-projects.vercel.app',
   'https://vintage-frontend.vercel.app',
-  'https://vintage-fronte-git-cea20b-adharshkattaikonam-gmailcoms-projects.vercel.app'
+  'https://vintage-fronte-git-cea20b-adharshkattaikonam-gmailcoms-projects.vercel.app',
+  'vintage-frontend-7jraums5i.vercel.app',
 ];
 
 app.use(cors({
@@ -149,4 +150,5 @@ app.use("/api/user/coupons", userCouponRoutes);
 
 
 app.use(errorHandler)
-app.listen(port, () => console.log(`Server running on port : ${port}`))
+
+server.listen(port, () => console.log(`Server running on port : ${port}`))
