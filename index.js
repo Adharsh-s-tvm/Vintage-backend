@@ -39,6 +39,7 @@ const app = express()
 
 const allowedOrigins = [
   'https://www.vintagefashion.site',
+  'https://www.vintagefashion.site/api',
   'https://vintagefashion.site',
   'http://localhost:3000',
   'https://vintage-frontend-adharshkattaikonam-gmailcoms-projects.vercel.app',
