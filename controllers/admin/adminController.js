@@ -39,7 +39,7 @@ const loginAdmin = asyncHandler(async (req, res) => {
     res.cookie("token", token, {
         httpOnly: true,
         secure: process.env.NODE_ENV !== "development",
-        sameSite: "strict",
+        sameSite: process.env.NODE_ENV !== "development" ? "none" : "strict",
         maxAge: 24 * 60 * 60 * 1000, // 1 day
     });
 
@@ -59,7 +59,7 @@ const logoutCurrentAdmin = asyncHandler(async (req, res) => {
         httpOnly: true,
         expires: new Date(0),
         secure: process.env.NODE_ENV !== 'development',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV !== "development" ? "none" : "strict",
         path: '/'
     });
 
@@ -68,7 +68,7 @@ const logoutCurrentAdmin = asyncHandler(async (req, res) => {
         httpOnly: true,
         expires: new Date(0),
         secure: process.env.NODE_ENV !== 'development',
-        sameSite: 'strict',
+        sameSite: process.env.NODE_ENV !== "development" ? "none" : "strict",
         path: '/'
     });
 
