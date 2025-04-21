@@ -45,27 +45,28 @@ const allowedOrigins = [
   'https://vintage-frontend-adharshkattaikonam-gmailcoms-projects.vercel.app',
   'https://vintage-frontend.vercel.app',
   'https://vintage-fronte-git-cea20b-adharshkattaikonam-gmailcoms-projects.vercel.app',
-  'vintage-frontend-7jraums5i.vercel.app',
+  'https://vintage-frontend-7jraums5i.vercel.app',
 ];
 
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
+  // origin: function(origin, callback) {
+  //   if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
+  //   if (allowedOrigins.indexOf(origin) === -1) {
+  //     const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+  //     return callback(new Error(msg), false);
+  //   }
+  //   return callback(null, true);
+  // },
+  origin:'https://www.vintagefashion.site',
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'Accept',
-    'Origin'
-  ],
+  // methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  // allowedHeaders: [
+  //   'Content-Type', 
+  //   'Authorization', 
+  //   'Accept',
+  //   'Origin'
+  // ],
 }));
   
 
