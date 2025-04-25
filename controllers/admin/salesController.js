@@ -497,8 +497,7 @@ export const downloadSalesReport = async (req, res) => {
             { align: 'center' }
            );
 
-        // Stats Grid - 2 columns for better space usage
-        doc.moveDown();
+        // Get stats using the same aggregation as getSalesReport
         const stats = await Order.aggregate([
             { $match: dateFilter },
             {
@@ -509,20 +508,22 @@ export const downloadSalesReport = async (req, res) => {
                             $cond: [
                                 { $eq: ['$orderStatus', 'Delivered'] },
                                 {
-                                    $reduce: {
-                                        input: '$items',
-                                        initialValue: 0,
-                                        in: {
-                                            $add: [
-                                                "$$value",
-                                                {
-                                                    $cond: [
-                                                        { $ne: ['$$this.status', 'Returned'] },
-                                                        "$$this.finalPrice",
-                                                        0
-                                                    ]
-                                                }
-                                            ]
+                                    $sum: {
+                                        $map: {
+                                            input: '$items',
+                                            as: 'item',
+                                            in: {
+                                                $cond: [
+                                                    {
+                                                        $and: [
+                                                            { $ne: ['$orderStatus', 'Cancelled'] },
+                                                            { $ne: ['$$item.status', 'Returned'] }
+                                                        ]
+                                                    },
+                                                    '$totalAmount',
+                                                    0
+                                                ]
+                                            }
                                         }
                                     }
                                 },
@@ -553,106 +554,126 @@ export const downloadSalesReport = async (req, res) => {
                     },
                     totalDiscounts: {
                         $sum: {
-                            $reduce: {
-                                input: "$items",
-                                initialValue: 0,
-                                in: {
-                                    $add: [
-                                        "$$value",
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$orderStatus', 'Cancelled'] },
                                         {
-                                            $subtract: [
-                                                { $multiply: ["$$this.price", "$$this.quantity"] },
-                                                "$$this.finalPrice"
-                                            ]
+                                            $not: {
+                                                $gt: [{
+                                                    $size: {
+                                                        $filter: {
+                                                            input: '$items',
+                                                            as: 'item',
+                                                            cond: { $eq: ['$$item.status', 'Returned'] }
+                                                        }
+                                                    }
+                                                }, 0]
+                                            }
                                         }
                                     ]
-                                }
-                            }
+                                },
+                                {
+                                    $reduce: {
+                                        input: "$items",
+                                        initialValue: 0,
+                                        in: {
+                                            $add: [
+                                                "$$value",
+                                                {
+                                                    $subtract: [
+                                                        { $multiply: ["$$this.price", "$$this.quantity"] },
+                                                        "$$this.finalPrice"
+                                                    ]
+                                                }
+                                            ]
+                                        }
+                                    }
+                                },
+                                0
+                            ]
                         }
                     }
                 }
             }
         ]);
-        const reportStats = stats[0] || {
-            totalRevenue: 0,
-            totalOrders: 0,
-            returnedOrders: 0,
-            cancelledOrders: 0,
-            totalDiscounts: 0
-        };
 
-        const statsTable = {
-            headers: ['Metric', 'Value'],
-            rows: [
-                ['Total Revenue', `₹${reportStats.totalRevenue.toLocaleString('en-IN')}`],
-                ['Total Orders', reportStats.totalOrders],
-                ['Returned Orders', reportStats.returnedOrders],
-                ['Cancelled Orders', reportStats.cancelledOrders],
-                ['Total Discounts', `₹${reportStats.totalDiscounts.toLocaleString('en-IN')}`]
-            ]
-        };
+        const salesData = await Order.aggregate([
+            { 
+                $match: {
+                    ...dateFilter,
+                    orderStatus: 'Delivered'
+                }
+            },
+            {
+                $project: {
+                    createdAt: 1,
+                    items: {
+                        $filter: {
+                            input: '$items',
+                            as: 'item',
+                            cond: { $ne: ['$$item.status', 'Returned'] }
+                        }
+                    },
+                    payment: 1
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        $dateToString: { 
+                            format: '%Y-%m-%d', 
+                            date: '$createdAt',
+                            timezone: 'Asia/Kolkata'
+                        }
+                    },
+                    sales: {
+                        $sum: {
+                            $reduce: {
+                                input: '$items',
+                                initialValue: 0,
+                                in: { $add: ['$$value', '$$this.finalPrice'] }
+                            }
+                        }
+                    },
+                    orders: { $sum: 1 }
+                }
+            },
+            { $sort: { '_id': 1 } }
+        ]);
 
-        createTable(doc, statsTable, {
-            startX: 40,
-            startY: doc.y + 10,
-            rowHeight: 25,
-            columnSpacing: 8,
-            headerColor: '#4E80EE',
-            alternateRowColor: '#F8F9FA',
-            width: doc.page.width - 80
-        });
-
-        // Recent Transactions with optimized space
+        // Add statistics to PDF
         doc.moveDown()
+           .fontSize(14)
            .font('Helvetica-Bold')
+           .text('Sales Statistics', { underline: true });
+
+        doc.moveDown()
            .fontSize(12)
-           .text('Recent Transactions', { underline: true });
+           .font('Helvetica')
+           .text(`Total Revenue: ₹${stats[0]?.totalRevenue.toFixed(2) || 0}`)
+           .text(`Total Orders: ${stats[0]?.totalOrders || 0}`)
+           .text(`Returned Orders: ${stats[0]?.returnedOrders || 0}`)
+           .text(`Cancelled Orders: ${stats[0]?.cancelledOrders || 0}`)
+           .text(`Total Discounts: ₹${stats[0]?.totalDiscounts.toFixed(2) || 0}`);
 
-        const transactions = await Order.find(dateFilter)
-            .select('orderId totalAmount payment createdAt orderStatus')
-            .sort('-createdAt')
-            .limit(15); // Reduced from previous limit
+        // Add daily sales data
+        doc.moveDown()
+           .fontSize(14)
+           .font('Helvetica-Bold')
+           .text('Daily Sales Breakdown', { underline: true });
 
-        const transactionsTable = {
-            headers: ['Date', 'Order ID', 'Amount', 'Method', 'Status'], // Shortened headers
-            rows: transactions.map(t => [
-                new Date(t.createdAt).toLocaleDateString('en-IN', { 
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: '2-digit'
-                }),
-                t.orderId,
-                `₹${t.totalAmount.toLocaleString('en-IN')}`,
-                t.payment.method,
-                t.orderStatus
-            ])
-        };
-
-        createTable(doc, transactionsTable, {
-            startX: 40,
-            startY: doc.y + 10,
-            rowHeight: 20, // Reduced row height
-            columnSpacing: 5, // Reduced spacing
-            headerColor: '#4E80EE',
-            alternateRowColor: '#F8F9FA',
-            width: doc.page.width - 80,
-            fontSize: 9 // Smaller font size
+        doc.moveDown();
+        salesData.forEach(day => {
+            doc.fontSize(12)
+               .font('Helvetica')
+               .text(`${day._id}: ₹${day.sales.toFixed(2)} (${day.orders} orders)`);
         });
-
-        // Add footer
-        doc.fontSize(8)
-           .text(
-                'Generated by Vintage Jacket Store',
-                40,
-                doc.page.height - 40,
-                { align: 'center', width: doc.page.width - 80 }
-            );
 
         doc.end();
-
     } catch (error) {
-        console.error('Error generating PDF:', error);
-        res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to generate PDF report' });
+        console.error('Error generating sales report:', error);
+        res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to generate sales report' });
     }
 };
 
