@@ -480,15 +480,16 @@ export const downloadSalesReport = async (req, res) => {
         res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
         doc.pipe(res);
 
-        // Page 1: Header and Summary
+        // Header and Title
         doc.font('Helvetica-Bold')
-           .fontSize(20)
+           .fontSize(24)
            .text('Sales Report', { align: 'center' });
 
-        // Compact metadata line
+        // Metadata line with styling
         doc.moveDown(0.5)
-           .fontSize(10)
+           .fontSize(12)
            .font('Helvetica')
+           .fillColor('#666666')
            .text(`Period: ${range.charAt(0).toUpperCase() + range.slice(1)} | Generated: ${new Date().toLocaleString('en-IN', { 
                 dateStyle: 'medium', 
                 timeStyle: 'short',
@@ -658,93 +659,149 @@ export const downloadSalesReport = async (req, res) => {
            .text(`Total Discounts: ₹${stats[0]?.totalDiscounts.toFixed(2) || 0}`);
 
         // Add daily sales data
-        doc.moveDown()
-           .fontSize(14)
+        // doc.moveDown()
+        //    .fontSize(14)
+        //    .font('Helvetica-Bold')
+        //    .text('Daily Sales Breakdown', { underline: true }); 
+
+        // doc.moveDown();
+        // salesData.forEach(day => {
+        //     doc.fontSize(12)
+        //        .font('Helvetica')
+        //        .text(`${day._id}: ₹${day.sales.toFixed(2)} (${day.orders} orders)`);
+        // });
+
+        // Helper function to draw table
+        const drawTable = (doc, data, columns, startX, startY, rowHeight) => {
+            let currentX = startX;
+            let currentY = startY;
+            
+            // Draw headers
+            doc.font('Helvetica-Bold').fontSize(12);
+            columns.forEach(column => {
+                doc.fillColor('#2C3E50')
+                   .rect(currentX, currentY, column.width, rowHeight)
+                   .fill();
+                doc.fillColor('white')
+                   .text(column.header, currentX + 5, currentY + 5, {
+                       width: column.width - 10,
+                       align: column.align || 'left'
+                   });
+                currentX += column.width;
+            });
+
+            // Draw data rows
+            currentY += rowHeight;
+            doc.font('Helvetica').fontSize(10);
+            data.forEach((row, i) => {
+                currentX = startX;
+                doc.fillColor(i % 2 === 0 ? '#F8F9FA' : '#FFFFFF')
+                   .rect(currentX, currentY, columns.reduce((sum, col) => sum + col.width, 0), rowHeight)
+                   .fill();
+                
+                columns.forEach(column => {
+                    doc.fillColor('#000000')
+                       .text(row[column.property].toString(), 
+                            currentX + 5, 
+                            currentY + 5,
+                            {
+                                width: column.width - 10,
+                                align: column.align || 'left'
+                            }
+                       );
+                    currentX += column.width;
+                });
+                currentY += rowHeight;
+            });
+
+            return currentY; // Return the Y position after the table
+        };
+
+        // Summary Statistics Table
+        doc.moveDown(2);
+        const summaryColumns = [
+            { header: 'Metric', property: 'metric', width: 150 },
+            { header: 'Value', property: 'value', width: 150, align: 'right' }
+        ];
+
+        const summaryData = [
+            { metric: 'Total Revenue', value: `₹${(stats[0]?.totalRevenue || 0).toLocaleString('en-IN')}` },
+            { metric: 'Total Orders', value: (stats[0]?.totalOrders || 0).toString() },
+            { metric: 'Returned Orders', value: (stats[0]?.returnedOrders || 0).toString() },
+            { metric: 'Cancelled Orders', value: (stats[0]?.cancelledOrders || 0).toString() },
+            { metric: 'Total Discounts', value: `₹${(stats[0]?.totalDiscounts || 0).toLocaleString('en-IN')}` }
+        ];
+
+        let currentY = drawTable(doc, summaryData, summaryColumns, 40, doc.y + 20, 30);
+
+        // Get top products data
+        const topProducts = await Order.aggregate([
+            { $match: dateFilter },
+            { $unwind: '$items' },
+            {
+                $group: {
+                    _id: '$items.product',
+                    totalSold: { $sum: '$items.quantity' },
+                    revenue: { $sum: '$items.finalPrice' }
+                }
+            },
+            {
+                $lookup: {
+                    from: 'products',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'productInfo'
+                }
+            },
+            { $unwind: '$productInfo' },
+            {
+                $project: {
+                    name: '$productInfo.name',
+                    totalSold: 1,
+                    revenue: 1
+                }
+            },
+            { $sort: { revenue: -1 } },
+            { $limit: 10 }
+        ]);
+
+        // Top Products Table
+        doc.moveDown(2)
            .font('Helvetica-Bold')
-           .text('Daily Sales Breakdown', { underline: true });
+           .fontSize(14)
+           .text('Top Performing Products', { underline: true });
 
-        doc.moveDown();
-        salesData.forEach(day => {
-            doc.fontSize(12)
-               .font('Helvetica')
-               .text(`${day._id}: ₹${day.sales.toFixed(2)} (${day.orders} orders)`);
-        });
+        const productColumns = [
+            { header: 'Product Name', property: 'name', width: 200 },
+            { header: 'Units Sold', property: 'totalSold', width: 100, align: 'right' },
+            { header: 'Revenue', property: 'revenue', width: 100, align: 'right' }
+        ];
 
-        doc.end();
-    } catch (error) {
-        console.error('Error generating sales report:', error);
-        res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to generate sales report' });
-    }
-};
+        const productData = topProducts.map(product => ({
+            name: product.name,
+            totalSold: product.totalSold,
+            revenue: `₹${product.revenue.toLocaleString('en-IN')}`
+        }));
 
-// Optimized helper function for creating tables
-function createTable(doc, table, options) {
-    const {
-        startX,
-        startY,
-        rowHeight = 20,
-        columnSpacing = 5,
-        headerColor = '#4E80EE',
-        alternateRowColor = '#F8F9FA',
-        width = doc.page.width - 80,
-        fontSize = 9
-    } = options;
+        currentY = drawTable(doc, productData, productColumns, 40, doc.y + 20, 30);
 
-    const columnWidth = width / table.headers.length;
-    let currentY = startY;
-
-    // Draw headers
-    doc.font('Helvetica-Bold')
-       .fontSize(fontSize);
-
-    // Header background
-    doc.fillColor(headerColor)
-       .rect(startX, currentY, width, rowHeight)
-       .fill();
-
-    // Header text
-    doc.fillColor('white');
-    table.headers.forEach((header, i) => {
-        doc.text(
-            header,
-            startX + (i * columnWidth) + columnSpacing,
-            currentY + (rowHeight / 3),
-            { 
-                width: columnWidth - (columnSpacing * 2),
-                align: i === 0 ? 'left' : 'right'
-            }
-        );
-    });
-
-    // Draw rows
-    currentY += rowHeight;
-    doc.font('Helvetica')
-       .fontSize(fontSize);
-
-    table.rows.forEach((row, rowIndex) => {
-        // Alternate row background
-        if (rowIndex % 2 === 0) {
-            doc.fillColor(alternateRowColor)
-               .rect(startX, currentY, width, rowHeight)
-               .fill();
+        // Add page numbers
+        const pages = doc.bufferedPageRange();
+        for (let i = 0; i < pages.count; i++) {
+            doc.switchToPage(i);
+            doc.fontSize(8)
+               .text(
+                   `Page ${i + 1} of ${pages.count}`,
+                   0,
+                   doc.page.height - 20,
+                   { align: 'center' }
+               );
         }
 
-        // Row text
-        doc.fillColor('black');
-        row.forEach((cell, i) => {
-            doc.text(
-                cell.toString(),
-                startX + (i * columnWidth) + columnSpacing,
-                currentY + (rowHeight / 3),
-                { 
-                    width: columnWidth - (columnSpacing * 2),
-                    align: i === 0 ? 'left' : 'right'
-                }
-            );
-        });
+        doc.end();
 
-        currentY += rowHeight;
-    });
-
-    doc.y = currentY + 10;
-}
+    } catch (error) {
+        console.error('Error in downloadSalesReport:', error);
+        res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ message: 'Failed to generate sales report PDF' });
+    }
+};
